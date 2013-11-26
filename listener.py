@@ -1,22 +1,25 @@
-import rospy, roslib
+import rospy, roslib, tf
 from geometry_msgs.msg import TransformStamped as ts
 from geometry_msgs.msg import Transform
+from geometry_msgs.msg import Vector3Stamped
 import libardrone
 import time
 from threading import Timer
 drone = None
 goalPos = (0,0, 3)
 def createBroadcaster(data):
-    br.createBroadcaster()
+    br = tf.TransformBroadcaster()
     br.sendTransform(data.transform)
 
 def createListener(data):
     listener = tf.TransformListener()
-    point = Point
+    v = vout = Vector3Stamped
+    v.point = data.transform.translation
     try:
-        listener.transformPoint(data)
+        listener.transformVector3(data.child_frame_id, v,vout)
     except(e):
         pass
+    print (vout.x, vout.y, vout.z)
 
 def getNewSpeeds(xyz):
     rightSpeed = 0
@@ -49,14 +52,15 @@ def callback(data):
     if time.time() - start_time > 1000000:
         perfLand()    
     else:
-        #createBroadcaster(data)
-        (rightSpeed, forwardSpeed, upSpeed) = getNewSpeeds(data.transform.translation)
+        createBroadcaster(data)
+        createListener(data)
+        #(rightSpeed, forwardSpeed, upSpeed) = getNewSpeeds(data.transform.translation)
         #time.sleep(2)
-        print data.transform.translation
-        print (rightSpeed, forwardSpeed, upSpeed)
-        print
+        #print data.transform.translation
+        #print (rightSpeed, forwardSpeed, upSpeed)
+        #print
         #def perform_op(move_right, move _forward, move_up, rotate_left_or_right):
-        drone.perform_op(rightSpeed, forwardSpeed, upSpeed, 0)
+        #drone.perform_op(rightSpeed, forwardSpeed, upSpeed, 0)
     #rospy.loginfo(rospy.get_caller_id()+"I heard \n %s",data.transform)
 
 def perfLand():
