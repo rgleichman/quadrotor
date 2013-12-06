@@ -1,22 +1,46 @@
 import rospy, roslib
 from geometry_msgs.msg import TransformStamped as ts
 from geometry_msgs.msg import Transform
+from geometry_msgs.msg import Vector3Stamped
 import libardrone
 import time
 from threading import Timer
 drone = None
-goalPos = (0,0, 3)
+goalPos = (.4,.4, 2.5)
+prevTime = None
+prevPos = None
 def createBroadcaster(data):
-    br.createBroadcaster()
+    br = tf.TransformBroadcaster()
     br.sendTransform(data.transform)
 
 def createListener(data):
     listener = tf.TransformListener()
-    point = Point
+    v = vout = Vector3Stamped
+    v.point = data.transform.translation
     try:
-        listener.transformPoint(data)
+        listener.transformVector3(data.child_frame_id, v,vout)
     except(e):
         pass
+    print (vout.x, vout.y, vout.z)
+
+#velocity is m/s
+def calcVelocity(xyz, now):  
+    x = xyz.x
+    y = xyz.y
+    z = xyz.z
+    vX,vY,vZ = (0,0,0)
+    global prevTime, prevPos  
+    if prevTime:
+        #normalized by max speed of 5m/s
+        vX = (x - prevPos[0])/(now - prevTime)/5.0
+        vY = (y - prevPos[1])/(now - prevTime)/5.0
+        vZ = (z - prevPos[2])/(now - prevTime)/5.0
+
+    prevTime = now
+    prevPos = (x,y,z)
+
+    return (vX, vY, vZ)
+
 
 def getNewSpeeds(xyz):
     rightSpeed = 0
@@ -26,33 +50,43 @@ def getNewSpeeds(xyz):
     y = xyz.y
     z = xyz.z
     xDiff = abs(goalPos[0] - x)
-    if xDiff > .004:
+    #normalized by max speed of 5m/s
+    if xDiff > .0004:
         if goalPos[0] > x:
-            rightSpeed = xDiff/2.0
+            rightSpeed = xDiff/5.0
         else:
-            rightSpeed = -xDiff/2.0
+            rightSpeed = -xDiff/5.0
     yDiff = abs(goalPos[1] - y)
-    if yDiff > .004:
+    if yDiff > .0004:
         if goalPos[1] > y:
-            forwardSpeed = yDiff/2.0
+            forwardSpeed = yDiff/5.0
         else:
-            forwardSpeed = -yDiff/2.0
+            forwardSpeed = -yDiff/5.0
     zDiff = abs(goalPos[2] - z)
-    if zDiff > .004:
+    if zDiff > .0004:
         if goalPos[2] > z:
-            upSpeed = zDiff/2.0
+            #battery issues make it so we need to /2 since the up speed is not quite 5 more like 2m/s
+            upSpeed = zDiff/2
         else:
-            upSpeed = -zDiff/2.0
+            upSpeed = -zDiff/2
     return (rightSpeed, forwardSpeed, upSpeed)        
 
 def callback(data):
-    if time.time() - start_time > 1000000:
+    now = time.time()
+    if time.time() - start_time > 15:
         perfLand()    
     else:
+        positionData = data.transform.translation
         #createBroadcaster(data)
-        (rightSpeed, forwardSpeed, upSpeed) = getNewSpeeds(data.transform.translation)
+        #createListener(data)
+        (vX, vY, vZ) = calcVelocity(positionData, now)
+        (pX, pY, pZ) = getNewSpeeds(positionData)
+        rightSpeed = pX - .9 * vX#(pX + vX)/2
+        forwardSpeed = pY - .9 * vY#(pY + vY)/2
+        upSpeed = pZ#(pZ + vZ)/2
         #time.sleep(2)
-        print data.transform.translation
+        #print data.transform.translation
+        print positionData
         print (rightSpeed, forwardSpeed, upSpeed)
         print
         #def perform_op(move_right, move _forward, move_up, rotate_left_or_right):
@@ -81,7 +115,7 @@ def listener():
     # name for our 'talker' node so that multiple talkers can
     # run simultaenously.
     
-    #perfTakeoff()
+    perfTakeoff()
     global start_time
     start_time = time.time()
     rospy.init_node('listener', anonymous=True)
