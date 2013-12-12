@@ -50,25 +50,24 @@ def getNewSpeeds(xyz):
     y = xyz.y
     z = xyz.z
     xDiff = abs(goalPos[0] - x)
-    #normalized by max speed of 5m/s
     if xDiff > .0004:
         if goalPos[0] > x:
-            rightSpeed = xDiff/5.0
+            rightSpeed = xDiff
         else:
-            rightSpeed = -xDiff/5.0
+            rightSpeed = -xDiff
     yDiff = abs(goalPos[1] - y)
     if yDiff > .0004:
         if goalPos[1] > y:
-            forwardSpeed = yDiff/5.0
+            forwardSpeed = yDiff
         else:
-            forwardSpeed = -yDiff/5.0
+            forwardSpeed = -yDiff
     zDiff = abs(goalPos[2] - z)
     if zDiff > .0004:
         if goalPos[2] > z:
             #battery issues make it so we need to /2 since the up speed is not quite 5 more like 2m/s
-            upSpeed = zDiff/2
+            upSpeed = zDiff
         else:
-            upSpeed = -zDiff/2
+            upSpeed = -zDiff
     return (rightSpeed, forwardSpeed, upSpeed)        
 
 def callback(data):
@@ -83,7 +82,7 @@ def callback(data):
         (pX, pY, pZ) = getNewSpeeds(positionData)
         rightSpeed = pX - .9 * vX#(pX + vX)/2
         forwardSpeed = pY - .9 * vY#(pY + vY)/2
-        upSpeed = pZ#(pZ + vZ)/2
+        upSpeed = pZ - .9 * vZ#(pZ + vZ)/2
         #time.sleep(2)
         #print data.transform.translation
         print positionData
