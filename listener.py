@@ -7,13 +7,18 @@ import time
 import random
 from threading import Timer
 import math
+
+roslib.load_manifest('quad')
+from tf import transformations as tran
+
 drone = None
 prevTime = None
 prevPos = None
 #goalPositions = [(0,0,1.5)]
 goalPositions = [(0.5,0.5,1)]
 goalPos = goalPositions[0]
-endTime = len(goalPositions) * 20
+#endTime = len(goalPositions) * 20
+endTime = 5
 maneuverStart = None
 objpos = None
 goalIdx = 0
@@ -21,6 +26,9 @@ start_time = None
 kX = 0.8
 kY = kX
 xyRangeMax = 0.5
+fly = True
+
+yprev = None
 
 def genGoalPositions():
     global goalPositions, endTime
@@ -81,7 +89,8 @@ def callback(data):
     #print "in callback"
     now = time.time()
     if now - start_time > endTime:
-        perfLand()    
+        if fly:
+            perfLand()    
         return
     
     if not maneuverStart:
@@ -120,21 +129,37 @@ def callback(data):
                 #print (rightSpeed, forwardSpeed, upSpeed)
                 #print
             #def perform_op(move_right, move _forward, move_up, rotate_left_or_right):
-            drone.perform_op(rightSpeed, forwardSpeed, upSpeed, 0)
+            if fly:
+                drone.perform_op(rightSpeed, forwardSpeed, upSpeed, 0)
         #rospy.loginfo(rospy.get_caller_id()+"I heard \n %s",data.transform)
         else:
+            global yprev
             positionData = data.transform.translation
+            rotationData = data.transform.rotation
+            eulerRotation = tran.euler_from_quaternion([rotationData.x, rotationData.y, rotationData.z, rotationData.w])
+            #print "rotationData", rotationData
+            #print "eulerRotations", eulerRotation
+            yaw = eulerRotation[2]
+            if not yprev:
+                yprev = yaw
+            yaw = (yaw + yprev) / 2.0
+            rot_value = min(0.3, max(-0.3,0.2*yaw))
+            #print "raw yaw", yaw
+            #print "rot value", rot_value
             (vX, vY, vZ) = calcVelocity(positionData, now)
             (pX, pY, pZ) = getNewSpeeds(positionData)
             rightSpeed = kX*pX - .8 * vX
             forwardSpeed = kY*pY - .8 * vY
             upSpeed = pZ - .8 * vZ
+            yprev = yaw
             #time.sleep(0.5)
             #print positionData
             #print (rightSpeed, forwardSpeed, upSpeed)
             #print
-        #def perform_op(move_right, move _forward, move_up, rotate_left_or_right):
-            drone.perform_op(rightSpeed, forwardSpeed, upSpeed, 0)
+            #def perform_op(move_right, move _forward, move_up, rotate_left_or_right):
+            if fly:
+                #drone.perform_op(rightSpeed, forwardSpeed, upSpeed, 0)
+                drone.perform_op(0, 0, 0, rot_value)
 def callbackwand(data):
     global objpos
     objpos = data.transform.translation
@@ -159,9 +184,10 @@ def listener():
     # anonymous=True flag means that rospy will choose a unique
     # name for our 'talker' node so that multiple talkers can
     # run simultaenously.
-    genGoalPositions()
+    #genGoalPositions()
     print "goalPositions", goalPositions
-    perfTakeoff()
+    if fly:
+        perfTakeoff()
     global start_time
     start_time = time.time()
     rospy.init_node('listener', anonymous=True)
