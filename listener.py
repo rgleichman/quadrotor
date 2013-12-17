@@ -10,23 +10,26 @@ import math
 drone = None
 prevTime = None
 prevPos = None
-goalPositions = [(0,0,1.5)]
+#goalPositions = [(0,0,1.5)]
+goalPositions = [(0.5,0.5,1)]
 goalPos = goalPositions[0]
-goalPositions.append(goalPos)
 endTime = len(goalPositions) * 20
 maneuverStart = None
 objpos = None
 goalIdx = 0
 start_time = None
+kX = 0.6
+kY = kX
 
 def genGoalPositions():
     global goalPositions, endTime
-    for i in range(5):
+    #for i in range(5):
+    for i in range(0):
         x = random.randint(0,10)/10.0
         y = random.randint(0,10)/10.0
         z = random.randint(5,12)/5.0
         goalPositions.append((x,y,z))
-    endTime = len(goalPositions) * 15
+    endTime = max(15, len(goalPositions) * 15)
 #velocity is m/s
 def calcVelocity(xyz, now):  
     x = xyz.x
@@ -73,6 +76,7 @@ def getNewSpeeds(xyz):
     return (.5 * rightSpeed, .5 * forwardSpeed, upSpeed)        
 
 def callback(data):
+    #print "in callback"
     now = time.time()
     global maneuverStart, goalPos, goalIdx, goalPositions, endTime, start_time
     #if not maneuverStart:
@@ -120,10 +124,10 @@ def callback(data):
             positionData = data.transform.translation
             (vX, vY, vZ) = calcVelocity(positionData, now)
             (pX, pY, pZ) = getNewSpeeds(positionData)
-            rightSpeed = pX - .8 * vX
-            forwardSpeed = pY - .8 * vY
+            rightSpeed = kX*pX - .8 * vX
+            forwardSpeed = kY*pY - .8 * vY
             upSpeed = pZ - .8 * vZ
-            #time.sleep(2)
+            #time.sleep(0.5)
             #print positionData
             #print (rightSpeed, forwardSpeed, upSpeed)
             #print
@@ -147,8 +151,7 @@ def perfTakeoff():
     drone.takeoff()
     time.sleep(5)
 
-def listener():
-
+def listener():    
     # in ROS, nodes are unique named. If two nodes with the same
     # node are launched, the previous one is kicked off. The 
     # anonymous=True flag means that rospy will choose a unique
@@ -159,10 +162,11 @@ def listener():
     global start_time
     start_time = time.time()
     rospy.init_node('listener', anonymous=True)
-        
-    rospy.Subscriber("/vicon/EEQUAD1492/EEQUAD1492", ts, callback)
-
-    rospy.Subscriber("/vicon/wand/wand", ts, callbackwand)
+    print "subscribing"
+    rospy.Subscriber("/vicon/EEQUAD149/EEQUAD149", ts, callback)
+    print "after subscribing"
+    print "goalPositions", goalPositions
+    #rospy.Subscriber("/vicon/wand/wand", ts, callbackwand)
     # spin() simply keeps python from exiting until this node is stopped
     rospy.spin()
         
