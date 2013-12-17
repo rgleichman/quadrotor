@@ -4,25 +4,29 @@ from geometry_msgs.msg import Transform
 from geometry_msgs.msg import Vector3Stamped
 import libardrone
 import time
+import random
 from threading import Timer
+import math
 drone = None
-goalPos = (.4,.4, 2.5)
 prevTime = None
 prevPos = None
-def createBroadcaster(data):
-    br = tf.TransformBroadcaster()
-    br.sendTransform(data.transform)
+goalPositions = [(0,0,1.5)]
+goalPos = goalPositions[0]
+goalPositions.append(goalPos)
+endTime = len(goalPositions) * 20
+maneuverStart = None
+objpos = None
+goalIdx = 0
+start_time = None
 
-def createListener(data):
-    listener = tf.TransformListener()
-    v = vout = Vector3Stamped
-    v.point = data.transform.translation
-    try:
-        listener.transformVector3(data.child_frame_id, v,vout)
-    except(e):
-        pass
-    print (vout.x, vout.y, vout.z)
-
+def genGoalPositions():
+    global goalPositions, endTime
+    for i in range(5):
+        x = random.randint(0,10)/10.0
+        y = random.randint(0,10)/10.0
+        z = random.randint(5,12)/5.0
+        goalPositions.append((x,y,z))
+    endTime = len(goalPositions) * 15
 #velocity is m/s
 def calcVelocity(xyz, now):  
     x = xyz.x
@@ -41,7 +45,6 @@ def calcVelocity(xyz, now):
 
     return (vX, vY, vZ)
 
-
 def getNewSpeeds(xyz):
     rightSpeed = 0
     forwardSpeed = 0
@@ -50,13 +53,13 @@ def getNewSpeeds(xyz):
     y = xyz.y
     z = xyz.z
     xDiff = abs(goalPos[0] - x)
-    if xDiff > .0004:
+    if xDiff > .1:
         if goalPos[0] > x:
             rightSpeed = xDiff
         else:
             rightSpeed = -xDiff
     yDiff = abs(goalPos[1] - y)
-    if yDiff > .0004:
+    if yDiff > .1:
         if goalPos[1] > y:
             forwardSpeed = yDiff
         else:
@@ -64,33 +67,71 @@ def getNewSpeeds(xyz):
     zDiff = abs(goalPos[2] - z)
     if zDiff > .0004:
         if goalPos[2] > z:
-            #battery issues make it so we need to /2 since the up speed is not quite 5 more like 2m/s
             upSpeed = zDiff
         else:
             upSpeed = -zDiff
-    return (rightSpeed, forwardSpeed, upSpeed)        
+    return (.5 * rightSpeed, .5 * forwardSpeed, upSpeed)        
 
 def callback(data):
     now = time.time()
-    if time.time() - start_time > 15:
+    global maneuverStart, goalPos, goalIdx, goalPositions, endTime, start_time
+    #if not maneuverStart:
+    #    maneuverStart = now
+    #    start_time = now
+    #elif now - maneuverStart > 3:
+     #   goalIdx = (goalIdx + 1) % len(goalPositions)
+      #  goalPos = goalPositions[goalIdx]
+       # maneuverStart = now
+    if now - start_time > endTime:
         perfLand()    
+        return
     else:
-        positionData = data.transform.translation
-        #createBroadcaster(data)
-        #createListener(data)
-        (vX, vY, vZ) = calcVelocity(positionData, now)
-        (pX, pY, pZ) = getNewSpeeds(positionData)
-        rightSpeed = pX - .9 * vX#(pX + vX)/2
-        forwardSpeed = pY - .9 * vY#(pY + vY)/2
-        upSpeed = pZ - .9 * vZ#(pZ + vZ)/2
-        #time.sleep(2)
-        #print data.transform.translation
-        print positionData
-        print (rightSpeed, forwardSpeed, upSpeed)
-        print
+        if (objpos != None):
+            quadpos = data.transform.translation
+            tmp = [quadpos.x-objpos.x, quadpos.y-objpos.y, quadpos.z-objpos.z]
+            distance = math.sqrt(tmp[0]*tmp[0]+tmp[1]*tmp[1]+tmp[2]*tmp[2])
+            if (distance < 1):
+                (vX, vY, vZ) = calcVelocity(quadpos, now)
+                print "TOO CLOSE WTF"
+                for i in tmp:
+                    i /= distance
+                print "X = " + str(tmp[0])
+                print "Y = " + str(tmp[1])
+                print "Z = " + str(tmp[2])
+                rightSpeed = 1.2 * tmp[0] -  vX
+                forwardSpeed = 1.2 * tmp[1] - vY
+                upSpeed = 1.2 * tmp[2] - vZ
+                drone.perform_op(rightSpeed, forwardSpeed, upSpeed, 0)
+            else:    
+                positionData = data.transform.translation
+                (vX, vY, vZ) = calcVelocity(positionData, now)
+                (pX, pY, pZ) = getNewSpeeds(positionData)
+                rightSpeed = pX - .8 * vX
+                forwardSpeed = pY - .8 * vY
+                upSpeed = pZ - .8 * vZ
+                #time.sleep(2)
+                #print positionData
+                #print (rightSpeed, forwardSpeed, upSpeed)
+                #print
+            #def perform_op(move_right, move _forward, move_up, rotate_left_or_right):
+            drone.perform_op(rightSpeed, forwardSpeed, upSpeed, 0)
+        #rospy.loginfo(rospy.get_caller_id()+"I heard \n %s",data.transform)
+        else:
+            positionData = data.transform.translation
+            (vX, vY, vZ) = calcVelocity(positionData, now)
+            (pX, pY, pZ) = getNewSpeeds(positionData)
+            rightSpeed = pX - .8 * vX
+            forwardSpeed = pY - .8 * vY
+            upSpeed = pZ - .8 * vZ
+            #time.sleep(2)
+            #print positionData
+            #print (rightSpeed, forwardSpeed, upSpeed)
+            #print
         #def perform_op(move_right, move _forward, move_up, rotate_left_or_right):
-        drone.perform_op(rightSpeed, forwardSpeed, upSpeed, 0)
-    #rospy.loginfo(rospy.get_caller_id()+"I heard \n %s",data.transform)
+            drone.perform_op(rightSpeed, forwardSpeed, upSpeed, 0)
+def callbackwand(data):
+    global objpos
+    objpos = data.transform.translation
 
 def perfLand():
     drone.halt()
@@ -113,13 +154,15 @@ def listener():
     # anonymous=True flag means that rospy will choose a unique
     # name for our 'talker' node so that multiple talkers can
     # run simultaenously.
-    
+    #genGoalPositions()
     perfTakeoff()
     global start_time
     start_time = time.time()
     rospy.init_node('listener', anonymous=True)
         
-    rospy.Subscriber("/vicon/EEQUAD149/EEQUAD149", ts, callback)
+    rospy.Subscriber("/vicon/EEQUAD1492/EEQUAD1492", ts, callback)
+
+    rospy.Subscriber("/vicon/wand/wand", ts, callbackwand)
     # spin() simply keeps python from exiting until this node is stopped
     rospy.spin()
         
